@@ -10,12 +10,13 @@ import io
 from PIL import Image
 import subprocess
 import os
+import dash_bootstrap_components as dbc 
 
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
     html.H1("STL File Segmentation App"),
-    
+
     dcc.Upload(
         id='stl-upload',
         children=html.Div([
@@ -24,7 +25,7 @@ app.layout = html.Div([
         ]),
         multiple=False  # Allow only one file to be uploaded
     ),
-    
+
     dcc.Loading(
         id="loading-stl",
         type="default",
@@ -33,18 +34,46 @@ app.layout = html.Div([
             html.Div(id='error-output', style={'color': 'red'}, className="row-container"),
         ],
     ),
-    
-    html.Button("Segment STL", id="segment-button", n_clicks=0),  # Add a button
-    
-    dcc.Graph(id='segmented-stl-viewer'),  # Display the segmented STL file
-    
-    html.Div(id='segment-output'),  # Display the segmentation output
-    
-    html.Button("Show Segmentation Results", id="show-results-button", n_clicks=0),  # Add a button to display results
-    
-    html.Div(id='segmentation-results')  # Display segmentation results
-], className="main-container")
 
+    html.Button("Segment STL", id="segment-button", n_clicks=0),  # Add a button
+
+    dbc.Button("Open Configuration", id="config-button", n_clicks=0),
+    
+    dbc.Modal([
+        dbc.ModalHeader("Configuration"),
+        dbc.ModalBody([
+            dcc.Input(id='number-input', type='number', min=1, max=3, placeholder='Enter a number between 1 and 3'),
+            dcc.Checklist(id='complex-checkbox', options=[{'label': 'Complex', 'value': 'complex'}]),
+        ]),
+        dbc.ModalFooter([
+            dbc.Button("Save", id="save-button"),
+            dbc.Button("Close", id="close-button", className="ml-auto"),
+        ]),
+    ], id="config-modal", is_open=False),
+
+    dcc.Graph(id='segmented-stl-viewer'),  # Display the segmented STL file
+
+    html.Div(id='segment-output'),  # Display the segmentation output
+
+    html.Button("Show Segmentation Results", id="show-results-button", n_clicks=0),  # Add a button to display results
+
+    html.Div(id='segmentation-results'),  # Display segmentation results
+
+    dbc.Button("Add Labels", id="add-labels-button", n_clicks=0),  # Add a button to open a dialog
+    dcc.Loading(
+        id="loading-labels",
+        type="default",
+        children=[
+            dcc.Upload(
+                id='label-upload',
+                style={'display': 'none'},  # Hidden by default
+                multiple=False
+            ),
+        ],
+    ),
+
+    html.Div(id='label-output')  # Display label output
+], className="main-container")
 
 @app.callback(
     [Output('stl-3d-viewers', 'children'), Output('error-output', 'children')],
@@ -242,7 +271,7 @@ def show_segmentation_results(n_clicks):
 
     # Replace this section with your logic to display segmentation results (e.g., images)
     result_images = []
-    result_directory = r"C:\Users\Emman\Desktop\JE\Ortho\STL-Segmentation\segmentation_results" # Directory where segmentation results are stored
+    result_directory = r"C:\Users\Emman\Desktop\JE\Ortho\Ortho\STL-Segmentation\segmentation_results" # Directory where segmentation results are stored
 
     if os.path.exists(result_directory) and os.path.isdir(result_directory):
         for image_file in os.listdir(result_directory):
@@ -257,6 +286,83 @@ def show_segmentation_results(n_clicks):
         return "No segmentation results to display."
 
     return result_images
+
+@app.callback(
+    Output('label-upload', 'style'),
+    Output('label-output', 'children'),
+    Input('add-labels-button', 'n_clicks'),
+    Input('label-upload', 'contents'),
+    State('label-upload', 'style')
+)
+def open_label_dialog(n_clicks, label_upload_contents, label_upload_style):
+    if n_clicks % 2 == 1:
+        # Read and display the image for labeling
+        image_path = r"C:\Users\Emman\Desktop\JE\Ortho\STL-Segmentation\2DTeeth.png"  # Path to the image you want to open
+        with open(image_path, 'rb') as img_file:
+            image_bytes = base64.b64encode(img_file.read()).decode()
+        
+        image_element = html.Img(src=f'data:image/jpeg;base64,{image_bytes}', width="400")
+        
+        # Toggle the 'display' style of the label upload component to show the dialog
+        label_upload_style = {'display': 'block'}
+        return label_upload_style, [image_element]
+    else:
+        # Hide the dialog and display the label output
+        label_upload_style = {'display': 'none'}
+        return label_upload_style, None
+    
+    
+def process_uploaded_labels(contents, filename):
+    if contents is None:
+        raise PreventUpdate
+
+    # Process the uploaded labels here and save the coordinates to a CSV file
+    decoded = base64.b64decode(contents.split(',')[1])
+    img = Image.open(io.BytesIO(decoded))
+
+    # For demonstration purposes, let's assume you select points by clicking on the image.
+    # You can modify this logic to suit your needs.
+
+    # Example: Get X and Y components of selected points (assumes a list of points in the format [(x1, y1), (x2, y2), ...])
+    selected_points = [(100, 200), (300, 400)]  # Replace with your logic
+
+    # Convert the selected points to a DataFrame
+    df = pd.DataFrame(selected_points, columns=['X', 'Y'])
+
+    # Save the DataFrame as a CSV file
+    csv_filename = 'labels.csv'
+    df.to_csv(csv_filename, index=False)
+
+    # Return a message to indicate that the labels are saved
+    return f"Labels saved to {csv_filename}"
+@app.callback(
+    Output("config-modal", "is_open"),
+    [Input("config-button", "n_clicks"), Input("save-button", "n_clicks"), Input("close-button", "n_clicks")],
+    [State("config-modal", "is_open")]
+)
+def toggle_modal(n1, n2, n3, is_open):
+    if n1 or n2 or n3:
+        return not is_open
+    return is_open
+
+@app.callback(
+    Output('config-output', 'children'),
+    Input('save-button', 'n_clicks'),
+    State('number-input', 'value'),
+    State('complex-checkbox', 'value')
+)
+def save_configuration(n_clicks, number_value, checkbox_value):
+    if n_clicks:
+        # Do something with the saved configuration
+        config_output = f"Saved Configuration: Number = {number_value}, Complex = {'Complex' if 'complex' in checkbox_value else 'Not Complex'}"
+        #open file
+        with open(r"C:\Users\Emman\Desktop\JE\Ortho\Ortho\STL-Segmentation\config.txt", 'w') as file:
+            file.write(config_output)
+        #convert variable to string
+        file.write(config_output)
+        return config_output
+
+    raise PreventUpdate
 
 if __name__ == '__main__':
     app.run_server(debug=True)

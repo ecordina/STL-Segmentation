@@ -2,3 +2,5 @@ C:\Users\Emman\Desktop\JE\Ortho\STL-Segmentation\OrthoCAD_Export_43495989\434959
 *.npy
 *Miniforge3-Darwin-arm64.sh*
 *.ipynb_checkpoints*
+OrthoCAD_Export_43495989/*
+OrthoCAD_Export*
